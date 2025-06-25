@@ -8,7 +8,7 @@
     "./lib/rand.js": "./lib/rand.browser.js"
   },
   "scripts": {
-    "prepare": "npm install && npm run build",
+    "prepare": "npm run build",
     "test": "vitest run",
     "cover": "npm run test -- --coverage",
     "build": "esbuild ./lib/index.js --outdir=./dist/ --bundle --platform=node  --external:asn1.js --external:js-lzma --external:js-sha1 --external:jksreader --external:gost89"
