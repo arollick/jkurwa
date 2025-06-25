@@ -1,54 +1,38 @@
-/* eslint-env mocha */
-const gost89 = require("gost89");
-const assert = require("assert");
-const fs = require("fs");
-const jk = require("../lib");
+import { beforeAll, afterAll, describe, it } from "vitest";
+import gost89 from "gost89";
+import assert from "assert";
+import * as jk from "../lib";
+import { assetPath, loadAsset, loadPriv, loadCert } from "./utils.js";
 
 describe("Box", () => {
   const algo = gost89.compat.algos();
 
-  const cert = jk.Certificate.from_asn1(
-    fs.readFileSync(`${__dirname}/data/SELF_SIGNED1.cer`)
-  );
-  const cert6929 = jk.Certificate.from_asn1(
-    fs.readFileSync(`${__dirname}/data/SELF_SIGNED_ENC_6929.cer`)
-  );
-  const toCert = jk.Certificate.from_asn1(
-    fs.readFileSync(`${__dirname}/data/SELF_SIGNED_ENC_40A0.cer`)
-  );
-  const certE54B = jk.Certificate.from_asn1(
-    fs.readFileSync(`${__dirname}/data/SELF_SIGNED_ENC_E54B.cer`)
-  );
-  const priv = jk.Priv.from_asn1(
-    fs.readFileSync(`${__dirname}/data/PRIV1.cer`)
-  );
-  const privEnc40A0 = jk.Priv.from_asn1(
-    fs.readFileSync(`${__dirname}/data/Key40A0.cer`)
-  );
-  const privEncE54B = jk.Priv.from_asn1(
-    fs.readFileSync(`${__dirname}/data/KeyE54B.cer`)
-  );
-  const privEnc6929 = jk.Priv.from_asn1(
-    fs.readFileSync(`${__dirname}/data/Key6929.cer`)
-  );
+  const cert = loadCert("SELF_SIGNED1.cer");
+  const cert6929 = loadCert("SELF_SIGNED_ENC_6929.cer");
+  const toCert = loadCert("SELF_SIGNED_ENC_40A0.cer");
+  const certE54B = loadCert("SELF_SIGNED_ENC_E54B.cer");
+  const priv = loadPriv("PRIV1.cer");
+  const privEnc40A0 = loadPriv("Key40A0.cer");
+  const privEncE54B = loadPriv("KeyE54B.cer");
+  const privEnc6929 = loadPriv("Key6929.cer");
 
   const box = new jk.Box({ algo });
   const time = 1540236305;
 
   const caList = new jk.models.Message();
   caList.wrap = {
-    contentType: 'signedData',
+    contentType: "signedData",
     content: {
       version: 1,
       digestAlgorithms: [],
       contentInfo: { contentType: "data" },
-      certificate: [cert, cert6929, toCert, certE54B].map(cert=> cert.ob),
+      certificate: [cert, cert6929, toCert, certE54B].map(cert => cert.ob),
       signerInfos: []
     }
   };
 
   describe("transport", () => {
-    const transport = fs.readFileSync(`${__dirname}/data/message.transport`);
+    const transport = loadAsset("message.transport");
 
     it("should parse transport buffer headers", async () => {
       const {
@@ -71,7 +55,7 @@ describe("Box", () => {
   });
 
   describe("signed p7s", () => {
-    const p7s = fs.readFileSync(`${__dirname}/data/message.p7`);
+    const p7s = loadAsset("message.p7");
 
     it("should return signed content", async () => {
       const { content } = await box.unwrap(p7s);
@@ -84,9 +68,10 @@ describe("Box", () => {
       const [signed] = pipe;
       assert.equal(signed.signed, true);
       assert.deepEqual(signed.cert.subject, {
-       "localityName": "Wakanda",
-       "organizationName": "Very Much CA",
-       "serialNumber": "UA-99999999",});
+        localityName: "Wakanda",
+        organizationName: "Very Much CA",
+        serialNumber: "UA-99999999"
+      });
       assert.equal(!!signed.cert.verified, false);
     });
 
@@ -98,16 +83,16 @@ describe("Box", () => {
       const [signed] = pipe;
       assert.equal(signed.signed, true);
       assert.deepEqual(signed.cert.subject, {
-       "localityName": "Wakanda",
-       "organizationName": "Very Much CA",
-       "serialNumber": "UA-99999999",});
+        localityName: "Wakanda",
+        organizationName: "Very Much CA",
+        serialNumber: "UA-99999999"
+      });
       assert.equal(signed.cert.verified, true);
     });
-
   });
 
   describe("detached sign p7s", () => {
-    const p7s = fs.readFileSync(`${__dirname}/data/message_detached.p7`);
+    const p7s = loadAsset("message_detached.p7");
 
     it("should report error if message is no supplied", async () => {
       const { content, error } = await box.unwrap(p7s);
@@ -131,7 +116,7 @@ describe("Box", () => {
   });
 
   describe("encrypted p7s", () => {
-    const p7s = fs.readFileSync(`${__dirname}/data/enc_message.p7`);
+    const p7s = loadAsset("enc_message.p7");
 
     it("should throw when key is not loaded into box", async () => {
       const { error } = await box.unwrap(p7s);
@@ -205,7 +190,7 @@ describe("Box", () => {
   });
 
   describe("encrypted transport", () => {
-    const p7s = fs.readFileSync(`${__dirname}/data/enc_message.transport`);
+    const p7s = loadAsset("enc_message.transport");
 
     it("should report ENOKEY if key is not loaded into box", async () => {
       const { error } = await box.unwrap(p7s);
@@ -262,9 +247,9 @@ describe("Box", () => {
 
       it("should read key material from filesystem", async () => {
         const boxWithKey = new jk.Box({ algo });
-        boxWithKey.load({ privPath: `${__dirname}/data/Key40A0.cer` });
+        boxWithKey.load({ privPath: assetPath("Key40A0.cer") });
         boxWithKey.load({
-          certPath: `${__dirname}/data/SELF_SIGNED_ENC_40A0.cer`
+          certPath: assetPath("SELF_SIGNED_ENC_40A0.cer")
         });
         const { content } = await boxWithKey.unwrap(p7s);
         assert.deepEqual(content, Buffer.from("123"));
@@ -273,11 +258,11 @@ describe("Box", () => {
       it("should read key material from DER/PEM", async () => {
         const boxWithKey = new jk.Box({ algo });
         boxWithKey.load({
-          privPath: `${__dirname}/data/STORE_A040.pem`,
+          privPath: assetPath("STORE_A040.pem"),
           password: "password"
         });
         boxWithKey.load({
-          certPath: `${__dirname}/data/SELF_SIGNED_ENC_40A0.cer`
+          certPath: assetPath("SELF_SIGNED_ENC_40A0.cer")
         });
         const { content } = await boxWithKey.unwrap(p7s);
         assert.deepEqual(content, Buffer.from("123"));
@@ -287,10 +272,10 @@ describe("Box", () => {
     it("should read encrypted key from filesystem", async () => {
       const boxWithKey = new jk.Box({ algo });
       boxWithKey.load({
-        privPem: fs.readFileSync(`${__dirname}/data/Key40A0.pem`)
+        privPem: loadAsset("Key40A0.pem")
       });
       boxWithKey.load({
-        certPem: fs.readFileSync(`${__dirname}/data/SELF_SIGNED_ENC_40A0.cer`)
+        certPem: loadAsset("SELF_SIGNED_ENC_40A0.cer")
       });
       const { content } = await boxWithKey.unwrap(p7s);
       assert.deepEqual(content, Buffer.from("123"));
@@ -299,9 +284,7 @@ describe("Box", () => {
 
   describe("clear data container", () => {
     it("should expect to see asn1 structure in transport container", async () => {
-      const clear = fs.readFileSync(
-        `${__dirname}/data/clear_message.transport`
-      );
+      const clear = loadAsset("clear_message.transport");
       assert.rejects(() => box.unwrap(clear), /Failed to match tag/);
     });
 
@@ -315,35 +298,25 @@ describe("Box", () => {
     const boxWithKey = new jk.Box({ algo });
     boxWithKey.load({ priv, cert });
 
-    it("should sign message with signing key", done => {
-      boxWithKey
+    it("should sign message with signing key", async () => {
+      await boxWithKey
         .pipe(
           Buffer.from("123"),
           [{ op: "sign", time }],
           {}
         )
-        .then(data =>
-          assert.deepEqual(
-            data,
-            fs.readFileSync(`${__dirname}/data/message.p7`)
-          )
-        )
-        .then(done);
+        .then(data => assert.deepEqual(data, loadAsset("message.p7")));
     });
 
-    it("should sign message with signing key (async)", done => {
-      boxWithKey
+    it("should sign message with signing key (async)", async () => {
+      await boxWithKey
         .pipe(
           Buffer.from("123"),
           [{ op: "sign", time }]
         )
         .then(data => {
-          assert.deepEqual(
-            data,
-            fs.readFileSync(`${__dirname}/data/message.p7`)
-          );
-        })
-        .then(done);
+          assert.deepEqual(data, loadAsset("message.p7"));
+        });
     });
   });
 
@@ -363,50 +336,32 @@ describe("Box", () => {
       );
     });
 
-    it("should encrypt message with encryption key", done => {
-      boxWithKey
+    it("should encrypt message with encryption key", async () => {
+      await boxWithKey
         .pipe(
           Buffer.from("123"),
           [{ op: "encrypt", forCert: toCert }]
         )
-        .then(data =>
-          assert.deepEqual(
-            data,
-            fs.readFileSync(`${__dirname}/data/enc_message.p7`)
-          )
-        )
-        .then(done);
+        .then(data => assert.deepEqual(data, loadAsset("enc_message.p7")));
     });
 
-    it("should encrypt message with encryption key and recipient passed as PEM", done => {
-      boxWithKey
+    it("should encrypt message with encryption key and recipient passed as PEM", async () => {
+      await boxWithKey
         .pipe(
           Buffer.from("123"),
           [{ op: "encrypt", forCert: toCert.to_pem() }],
           {}
         )
-        .then(data =>
-          assert.deepEqual(
-            data,
-            fs.readFileSync(`${__dirname}/data/enc_message.p7`)
-          )
-        )
-        .then(done);
+        .then(data => assert.deepEqual(data, loadAsset("enc_message.p7")));
     });
 
-    it("should encrypt message with encryption key (async)", done => {
-      boxWithKey
+    it("should encrypt message with encryption key (async)", async () => {
+      await boxWithKey
         .pipe(
           Buffer.from("123"),
           [{ op: "encrypt", forCert: toCert }]
         )
-        .then(data =>
-          assert.deepEqual(
-            data,
-            fs.readFileSync(`${__dirname}/data/enc_message.p7`)
-          )
-        )
-        .then(done);
+        .then(data => assert.deepEqual(data, loadAsset("enc_message.p7")));
     });
   });
 });

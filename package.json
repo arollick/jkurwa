@@ -1,22 +1,16 @@
 {
   "name": "jkurwa",
-  "version": "1.21.2",
+  "version": "1.22.0",
   "description": "Ukrainian national EC cryptography (DSTU-4145) implementaion",
-  "main": "lib/index.js",
+  "type": "module",
+  "main": "dist/index.js",
   "browser": {
     "./lib/rand.js": "./lib/rand.browser.js"
   },
-  "jest": {
-    "testRegex": [
-      "test/test.*.js"
-    ],
-    "setupFiles": [
-      "./test/setup.js"
-    ]
-  },
   "scripts": {
-    "test": "jest ./test/test*.js",
-    "cover": "npm run test -- --coverage"
+    "test": "vitest run",
+    "cover": "npm run test -- --coverage",
+    "build": "esbuild ./lib/index.js --outdir=./dist/ --bundle --platform=node  --external:asn1.js --external:js-lzma --external:js-sha1 --external:jksreader --external:gost89"
   },
   "repository": {
     "type": "git",
@@ -36,6 +30,7 @@
   "homepage": "https://github.com/dstucrypt/jkurwa/",
   "devDependencies": {
     "codecov": "^3.8.1",
+    "esbuild": "^0.25.5",
     "eslint": "^5.9.0",
     "eslint-config-airbnb": "^17.1.0",
     "eslint-config-prettier": "^4.2.0",
@@ -43,8 +38,9 @@
     "eslint-plugin-jsx-a11y": "^6.1.2",
     "eslint-plugin-react": "^7.11.1",
     "gost89": "^0.1.11",
-    "jest": "^26.0.1",
-    "prettier": "^1.17.0"
+    "prettier": "^1.17.0",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.1"
   },
   "dependencies": {
     "asn1.js": "muromec/asn1.js",
