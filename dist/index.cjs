@@ -62,10 +62,10 @@ __export(models_exports, {
 });
 
 // lib/models/Certificate.js
-var import_asn19 = __toESM(require("asn1.js"), 1);
+var import_asn19 = __toESM(require("asn1.js"));
 
 // lib/curve.js
-var import_asn17 = __toESM(require("asn1.js"), 1);
+var import_asn17 = __toESM(require("asn1.js"));
 
 // lib/field.js
 var import_buffer = require("buffer");
@@ -1018,7 +1018,7 @@ var mulPos2 = mulPos;
 var getWindowSize2 = getWindowSize;
 
 // lib/models/Priv.js
-var import_asn16 = __toESM(require("asn1.js"), 1);
+var import_asn16 = __toESM(require("asn1.js"));
 
 // lib/util.js
 function add_zero(u8, reorder) {
@@ -1094,7 +1094,7 @@ function maybeHex(inp, pad) {
 }
 
 // lib/rand.js
-var import_node_crypto = __toESM(require("node:crypto"), 1);
+var import_node_crypto = __toESM(require("node:crypto"));
 function rand_default(xb) {
   const ret = import_node_crypto.default.rng(xb.length);
   for (let i2 = 0; i2 < xb.length; i2++) {
@@ -1225,7 +1225,7 @@ __export(dstszi2010_exports, {
   PKCS7_CONTENT_TYPES: () => PKCS7_CONTENT_TYPES,
   SharedInfo: () => SharedInfo
 });
-var import_asn12 = __toESM(require("asn1.js"), 1);
+var import_asn12 = __toESM(require("asn1.js"));
 
 // lib/spec/rfc3280.js
 var rfc3280_exports = {};
@@ -1253,7 +1253,7 @@ __export(rfc3280_exports, {
   Version: () => Version,
   injectPubAlgo: () => injectPubAlgo
 });
-var import_asn1 = __toESM(require("asn1.js"), 1);
+var import_asn1 = __toESM(require("asn1.js"));
 var CRLReason = import_asn1.default.define("CRLReason", function() {
   this.enum({
     0: "unspecified",
@@ -1771,7 +1771,7 @@ var defaultSbox = import_buffer4.Buffer.from(
 var DEFAULT_SBOX_COMPRESSED = packSbox(defaultSbox);
 
 // lib/spec/pbes.js
-var import_asn13 = __toESM(require("asn1.js"), 1);
+var import_asn13 = __toESM(require("asn1.js"));
 var CipherParams = ContentEncryptionAlgorithmIdentifier;
 var ContentInfo2 = ContentInfo;
 var OID = {
@@ -1897,7 +1897,7 @@ var pbes2_serialize = function(store) {
 var pbes_default = PBES2;
 
 // lib/spec/pfx.js
-var import_asn14 = __toESM(require("asn1.js"), 1);
+var import_asn14 = __toESM(require("asn1.js"));
 var OID2 = {
   "1 2 840 113549 1 12 10 1 2": "pkcs-12-pkcs-8ShroudedKeyBag",
   "1 2 840 113549 1 12 10 1 3": "pkcs-12-certBag",
@@ -1959,7 +1959,7 @@ function certbags_from_asn1(data) {
 }
 
 // lib/spec/keystore.js
-var import_asn15 = __toESM(require("asn1.js"), 1);
+var import_asn15 = __toESM(require("asn1.js"));
 var OID3 = {
   "1 2 804 2 1 1 1 1 3 1 1": "DSTU_4145_LE",
   "1 3 6 1 4 1 19398 1 1 2 3": "DSTU_4145_KEY_BITS",
@@ -2995,7 +2995,7 @@ function pkey(curve_name, key_data, key_fmt) {
 var std_curve = (id) => Curve2.from_id(id);
 
 // lib/util/str.js
-var import_asn18 = __toESM(require("asn1.js"), 1);
+var import_asn18 = __toESM(require("asn1.js"));
 function encodeUtf8Str(input, encoder) {
   const UTF8STR = import_asn18.default.define("UTF8STR", function UTF8STR2() {
     this.utf8str();
@@ -3400,7 +3400,7 @@ var Certificate_default = Certificate2;
 var import_buffer9 = require("buffer");
 
 // lib/spec/rfc3161-tsp.js
-var import_asn110 = __toESM(require("asn1.js"), 1);
+var import_asn110 = __toESM(require("asn1.js"));
 var TimeStampReq = import_asn110.default.define("TimeStampReq", function() {
   this.seq().obj(
     this.key("version").int({ 1: "v1" }),
@@ -3457,10 +3457,10 @@ var rfc3161_tsp_default = {
 };
 
 // lib/spec/rfc5035-certid.js
-var import_asn112 = __toESM(require("asn1.js"), 1);
+var import_asn112 = __toESM(require("asn1.js"));
 
 // lib/spec/rfc4210-cmp.js
-var import_asn111 = __toESM(require("asn1.js"), 1);
+var import_asn111 = __toESM(require("asn1.js"));
 var OtherName = import_asn111.default.define("OtherName", function() {
   this.seq().obj(this.key("type-id").objid(), this.key("value").any());
 });
@@ -3653,7 +3653,7 @@ SigningCertificateV2.wrap = function(cert, hash) {
 var import_buffer8 = require("buffer");
 
 // lib/util/packed_xml.js
-var import_js_lzma = __toESM(require("js-lzma"), 1);
+var import_js_lzma = __toESM(require("js-lzma"));
 var import_buffer7 = require("buffer");
 var Stream = {
   inStream: function(data) {
@@ -3972,10 +3972,10 @@ var useContentTsp = (value) => ["all", "content"].includes(value);
 var useSignatureTsp = (value) => ["all", "signature"].includes(value);
 
 // lib/spec/rfc5126-cades.js
-var import_asn114 = __toESM(require("asn1.js"), 1);
+var import_asn114 = __toESM(require("asn1.js"));
 
 // lib/spec/rfc2560-ocsp.js
-var import_asn113 = __toESM(require("asn1.js"), 1);
+var import_asn113 = __toESM(require("asn1.js"));
 var OCSPRequest = import_asn113.default.define("OCSPRequest", function() {
   this.seq().obj(
     this.key("tbsRequest").use(TBSRequest),
@@ -4829,7 +4829,7 @@ var Message = class _Message {
 var Message_default = Message;
 
 // lib/app/keycoder.js
-var import_asn115 = __toESM(require("asn1.js"), 1);
+var import_asn115 = __toESM(require("asn1.js"));
 var import_buffer10 = require("buffer");
 var Keycoder = class {
   constructor() {
@@ -4879,8 +4879,8 @@ function guess_parse(indata) {
 var keycoder_default = Keycoder;
 
 // lib/util/load.js
-var import_fs = __toESM(require("fs"), 1);
-var import_jksreader = __toESM(require("jksreader"), 1);
+var import_fs = __toESM(require("fs"));
+var import_jksreader = __toESM(require("jksreader"));
 
 // lib/util/complain.js
 var EOLD = class extends Error {
@@ -4959,7 +4959,7 @@ function load(keyinfo, algo) {
 var load_default = load;
 
 // lib/services/tsp.js
-var import_gost89 = __toESM(require("gost89"), 1);
+var import_gost89 = __toESM(require("gost89"));
 function getStampCb(cert, hashedMessage, query, cb, errorCb) {
   var tsp = rfc3161_tsp_default.TimeStampReq.encode(
     {
