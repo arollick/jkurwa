@@ -2,8 +2,8 @@
   "name": "jkurwa",
   "version": "1.22.0",
   "description": "Ukrainian national EC cryptography (DSTU-4145) implementaion",
-  "type": "module",
-  "main": "dist/index.js",
+  "type": "commonjs",
+  "main": "dist/index.cjs",
   "browser": {
     "./lib/rand.js": "./lib/rand.browser.js"
   },
@@ -11,8 +11,8 @@
     "prepare": "npm run build",
     "test": "vitest run",
     "cover": "npm run test -- --coverage",
-    "build": "esbuild ./lib/index.js --outdir=./dist/ --bundle --platform=node  --external:asn1.js --external:js-lzma --external:js-sha1 --external:jksreader --external:gost89"
-  },
+    "build": "esbuild ./lib/index.js --bundle --platform=node --format=cjs --outfile=./dist/index.cjs --external:asn1.js --external:js-lzma --external:js-sha1 --external:jksreader --external:gost89"
+     },
   "repository": {
     "type": "git",
     "url": "git@github.com:dstucrypt/jkurwa"
