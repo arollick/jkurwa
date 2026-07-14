@@ -1,8 +1,8 @@
 {
   "name": "jkurwa",
-  "version": "1.22.0",
+  "version": "1.22.7",
   "description": "Ukrainian national EC cryptography (DSTU-4145) implementaion",
-  "type": "commonjs",
+  "type": "module",
   "main": "dist/index.cjs",
   "browser": {
     "./lib/rand.js": "./lib/rand.browser.js"
@@ -11,8 +11,8 @@
     "prepare": "npm run build",
     "test": "vitest run",
     "cover": "npm run test -- --coverage",
-    "build": "esbuild ./lib/index.js --bundle --platform=node --format=cjs --outfile=./dist/index.cjs --external:asn1.js --external:js-lzma --external:js-sha1 --external:jksreader --external:gost89"
-     },
+    "build": "tsdown lib/index.js -f cjs -f esm --clean --platform node --target es2015 --deps.never-bundle asn1.js --deps.never-bundle js-lzma --deps.never-bundle jksreader --deps.never-bundle gost89 --deps.never-bundle bn.js --deps.never-bundle buffer"
+  },
   "repository": {
     "type": "git",
     "url": "git@github.com:dstucrypt/jkurwa"
@@ -31,7 +31,6 @@
   "homepage": "https://github.com/dstucrypt/jkurwa/",
   "devDependencies": {
     "codecov": "^3.8.1",
-    "esbuild": "^0.25.5",
     "eslint": "^5.9.0",
     "eslint-config-airbnb": "^17.1.0",
     "eslint-config-prettier": "^4.2.0",
@@ -40,8 +39,9 @@
     "eslint-plugin-react": "^7.11.1",
     "gost89": "^0.1.11",
     "prettier": "^1.17.0",
+    "tsdown": "^0.22.7",
     "vite": "^6.3.5",
-    "vitest": "^3.2.1"
+    "vitest": "^3.2.7"
   },
   "dependencies": {
     "asn1.js": "muromec/asn1.js",
@@ -55,5 +55,13 @@
       "airbnb",
       "prettier"
     ]
+  },
+  "module": "dist/index.mjs",
+  "exports": {
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.cjs"
+    }
   }
 }
