@@ -5,7 +5,7 @@ GF2m ellipcit curves library in javascript.
 
 * Supports short Weierstrass curves used in Ukrainian standard DSTU 4145;
 * Provides key deriviation for DSTU block ciphers (see https://github.com/muromec/em-gost);
-* Encypted containers can be parsed and decrypted if respective cipher implementation is passed. See gost89 and dstucrypt/agent for reference;
+* Encypted containers, including structural PKCS#12/PFX PBES2 containers, can be parsed and decrypted if respective cipher implementation is passed. See gost89 and dstucrypt/agent for reference;
 * Encrypted and signed messages in wicked PKCS#7 format used by tax office (sta.gov.ua) are supported for both read and write (see jk.Box, jk.util.transport);
 * Includes parsers for signed and encrypted messages, X509.v3 certificates, JKS and Key-6.dat key containers, TSP, CMP, OCSP requests and responses.
 
@@ -27,6 +27,10 @@ Usage
 -----
 
 See ./test/ and ./examples/ directories. See dstucrypt/agent repo for example app.
+
+To run the Kupyna/Kalyna cross-repository provider test, check out `gost89` beside this repository and run `JKURWA_GOST89_PROVIDER=../gost89/lib/compat.js npm run test:local-provider`. The explicit command fails if `JKURWA_GOST89_PROVIDER` is missing or does not name a file; the regular test suite skips this optional cross-repository check when no provider is configured. The tested provider must report version 0.1.12; publishing and pinning that provider release is a separate deployment step.
+
+The Kupyna/Kalyna PFX parser requires structurally valid authenticated Kupyna `MacData`. PBES2 and PFX salts must be non-empty and no larger than 1024 bytes; individual KDF and PFX MAC iteration counts are limited to 100000. A PFX may contain at most 16 protected stores, with combined protected-store plus PFX MAC KDF work capped at 300000 iterations. Cryptographic MAC verification and equivalent DTO-level enforcement require the reviewed `gost89` profile provider; arbitrary injected `storeload` implementations do not provide that guarantee. Legacy GOST PBES2 and IIT containers remain supported, while unsupported authenticated-safe content and PFX files without a protected key store are rejected.
 
 Sister libraries: 
 

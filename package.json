@@ -10,6 +10,7 @@
   "scripts": {
     "prepare": "npm run build",
     "test": "vitest run",
+    "test:local-provider": "node test/require-local-provider.js && vitest run test/test-store-provider.js",
     "cover": "npm run test -- --coverage",
     "build": "esbuild ./lib/index.js --bundle --platform=node --format=cjs --outfile=./dist/index.cjs --external:asn1.js --external:js-lzma --external:js-sha1 --external:jksreader --external:gost89"
      },

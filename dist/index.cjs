@@ -1774,10 +1774,17 @@ var DEFAULT_SBOX_COMPRESSED = packSbox(defaultSbox);
 var import_asn13 = __toESM(require("asn1.js"));
 var CipherParams = ContentEncryptionAlgorithmIdentifier;
 var ContentInfo2 = ContentInfo;
+var MAX_PBES2_SALT_LENGTH = 1024;
+var MAX_KDF_ITERATIONS = 1e5;
 var OID = {
   "1 2 840 113549 1 5 13": "PBES2",
-  "1 2 840 113549 1 5 12": "PBKDF2"
+  "1 2 840 113549 1 5 12": "PBKDF2",
+  "1 2 804 2 1 1 1 1 2 2 4": "Dstu7564mac-256",
+  "1 2 804 2 1 1 1 1 1 3 5 2": "Dstu7624cbc-256"
 };
+var Dstu7624Parameters = import_asn13.default.define("Dstu7624Parameters", function() {
+  this.seq().obj(this.key("iv").octstr());
+});
 var PBKDF2_params = import_asn13.default.define("PBKDF2-params", function() {
   this.seq().obj(
     this.key("salt").octstr(),
@@ -1808,13 +1815,16 @@ var PBES2 = import_asn13.default.define("StorePBES2", function() {
   );
 });
 Object.assign(ContentInfo2.algoModel.IDS, OID);
-Object.assign(ContentInfo2.algoModel, { PBES2: PBES2_params });
+Object.assign(ContentInfo2.algoModel, {
+  PBES2: PBES2_params,
+  "Dstu7624cbc-256": Dstu7624Parameters
+});
 var pbes2_parse = function(data) {
   const obj = PBES2.decode(data, "der");
   return [pbes2_parse_asn1(obj)];
 };
 var pbes2_parse_asn1 = function(asn116) {
-  var kdf, enc, params, iv, sbox, salt, iter;
+  var kdf, enc, params, iv, sbox, salt, iter, keyLength;
   if (asn116.contentEncryptionAlgorithm.algorithm !== "PBES2") {
     throw new Error(asn116.contentEncryptionAlgorithm.algorithm);
   }
@@ -1825,12 +1835,23 @@ var pbes2_parse_asn1 = function(asn116) {
   if (kdf.id !== "PBKDF2") {
     throw new Error(kdf.id);
   }
-  if (kdf.params.hash.algorithm !== "Gost34311-hmac") {
-    throw new Error("Unknown cipher " + kdf.params.hash.algorithm);
+  if (kdf.params.hash.algorithm !== "Gost34311-hmac" && kdf.params.hash.algorithm !== "Dstu7564mac-256") {
+    throw new Error("Unknown PBES2 KDF " + kdf.params.hash.algorithm);
+  }
+  if (kdf.params.hash.parameters.type !== "null_") {
+    throw new Error("Unsupported PBES2 KDF parameters");
   }
   enc = asn116.contentEncryptionAlgorithm.parameters.value.encryptionScheme;
-  if (enc.algorithm !== "Gost28147-cfb") {
-    throw new Error(enc.algorithm);
+  if (enc.algorithm !== "Gost28147-cfb" && enc.algorithm !== "Dstu7624cbc-256") {
+    throw new Error("Unknown PBES2 cipher " + enc.algorithm);
+  }
+  if (kdf.params.hash.algorithm === "Gost34311-hmac" && enc.algorithm !== "Gost28147-cfb" || kdf.params.hash.algorithm === "Dstu7564mac-256" && enc.algorithm !== "Dstu7624cbc-256") {
+    throw new Error(
+      "Unsupported PBES2 profile " + kdf.params.hash.algorithm + "/" + enc.algorithm
+    );
+  }
+  if (enc.parameters.type !== "params") {
+    throw new Error("Encryption params not passed");
   }
   params = enc.parameters.value;
   if (params === null) {
@@ -1840,21 +1861,40 @@ var pbes2_parse_asn1 = function(asn116) {
   sbox = params.dke;
   salt = kdf.params.salt;
   iter = kdf.params.cycles;
-  if (iv.length !== 8 || sbox.length !== 64 || salt.length !== 32) {
+  keyLength = kdf.params.keyLength;
+  if (keyLength && keyLength.toNumber() !== 32) {
+    throw new Error("Unsupported PBES2 key length");
+  }
+  iter = iter.toNumber();
+  if (!Number.isSafeInteger(iter) || iter < 1 || iter > MAX_KDF_ITERATIONS) {
+    throw new Error("Invalid PBES2 iteration count");
+  }
+  if (salt.length === 0 || salt.length > MAX_PBES2_SALT_LENGTH) {
+    throw new Error("Invalid PBES2 salt length " + salt.length);
+  }
+  if (enc.algorithm === "Gost28147-cfb" && (iv.length !== 8 || !sbox || sbox.length !== 64)) {
     throw new Error(
-      "IV len: " + iv.length + ", S-BOX len: " + sbox.length + ", SALT len: " + salt.length
+      "IV len: " + iv.length + ", S-BOX len: " + (sbox ? sbox.length : 0) + ", SALT len: " + salt.length
     );
+  }
+  if (enc.algorithm === "Dstu7624cbc-256" && (iv.length !== 32 || asn116.encryptedContent.length === 0 || asn116.encryptedContent.length % 32 !== 0)) {
+    throw new Error("Invalid Dstu7624cbc-256 parameters");
   }
   return {
     format: "PBES2",
+    kdf: kdf.params.hash.algorithm,
+    enc: enc.algorithm,
     iv,
     sbox,
     salt,
-    iters: iter.toNumber(),
+    iters: iter,
     body: asn116.encryptedContent
   };
 };
 var pbes2_serialize = function(store) {
+  if (store.kdf && store.kdf !== "Gost34311-hmac" || store.enc && store.enc !== "Gost28147-cfb") {
+    throw new Error("PBES2 serialization supports only the legacy GOST profile");
+  }
   return PBES2.encode(
     {
       contentEncryptionAlgorithm: {
@@ -1903,6 +1943,13 @@ var OID2 = {
   "1 2 840 113549 1 12 10 1 3": "pkcs-12-certBag",
   "1 2 840 113549 1 12 10 1 5": "secretBag"
 };
+var MAX_PFX_PROTECTED_STORES = 16;
+var MAX_PFX_TOTAL_KDF_ITERATIONS = 3e5;
+function pfxError(message) {
+  const error = new Error(message);
+  error.name = "PFXError";
+  return error;
+}
 var CertBag = import_asn14.default.define("CertBag", function() {
   this.seq().obj(
     this.key("id").objid({
@@ -1928,7 +1975,7 @@ var SafeBag = import_asn14.default.define("SafeContents", function() {
     this.key("bagId").objid(OID2),
     this.key("bagValue").explicit(0).use(function(ob) {
       if (!BagModels[ob.bagId]) {
-        throw new Error("Unknown bag id", ob.bagId);
+        throw pfxError("Unknown PFX bag id " + ob.bagId);
       }
       return BagModels[ob.bagId];
     }),
@@ -1941,17 +1988,110 @@ var SafeContents = import_asn14.default.define("SafeContents", function() {
 var Bags = import_asn14.default.define("ContentInfo", function() {
   this.seqof(ContentInfo);
 });
+var DigestInfo = import_asn14.default.define("DigestInfo", function() {
+  this.seq().obj(
+    this.key("digestAlgorithm").seq().obj(
+      this.key("algorithm").objid({
+        "1 2 804 2 1 1 1 1 2 2 1": "Dstu7564-256"
+      }),
+      this.key("parameters").optional().any()
+    ),
+    this.key("digest").octstr()
+  );
+});
+var MacData = import_asn14.default.define("MacData", function() {
+  this.seq().obj(
+    this.key("mac").use(DigestInfo),
+    this.key("macSalt").octstr(),
+    this.key("iterations").optional().int()
+  );
+});
+var PFX = import_asn14.default.define("PFX", function() {
+  this.seq().obj(
+    this.key("version").int(),
+    this.key("authSafe").use(ContentInfo),
+    this.key("macData").optional().use(MacData)
+  );
+});
 function pfx_parse(data) {
-  const messages = Bags.decode(data.slice(30), "der");
-  return messages.filter(
-    (msg) => msg.contentType === "data" || msg.contentType === "encryptedData"
-  ).map((msg) => {
+  const pfx = PFX.decode(data, "der");
+  if (pfx.version.toNumber() !== 3) {
+    throw pfxError("Unsupported PFX version");
+  }
+  if (pfx.authSafe.contentType !== "data" || !pfx.authSafe.content) {
+    throw pfxError("Unsupported PFX authSafe content");
+  }
+  const messages = Bags.decode(pfx.authSafe.content, "der");
+  const stores = [];
+  const ignoredBags = [];
+  messages.forEach((msg) => {
     if (msg.contentType === "encryptedData") {
-      return pbes_default.obj_parse(msg.content.encryptedContentInfo);
+      stores.push(pbes2_parse_asn1(msg.content.encryptedContentInfo));
+      return;
+    }
+    if (msg.contentType !== "data") {
+      throw pfxError("Unsupported PFX authenticated-safe content");
     }
     const bags = SafeContents.decode(msg.content, "der");
-    return bags.filter((bag) => bag.bagId === "pkcs-12-pkcs-8ShroudedKeyBag").map((bag) => pbes_default.obj_parse(bag.bagValue));
-  }).reduce((acc, keys) => acc.concat(keys), []);
+    bags.forEach((bag) => {
+      if (bag.bagId === "pkcs-12-pkcs-8ShroudedKeyBag") {
+        stores.push(pbes2_parse_asn1(bag.bagValue));
+      } else if (bag.bagId !== "pkcs-12-certBag") {
+        ignoredBags.push(bag.bagId);
+      }
+    });
+  });
+  if (stores.length === 0) {
+    throw pfxError("PFX contains no supported protected key stores");
+  }
+  const strictProfile = stores.some(
+    (store) => store.kdf === "Dstu7564mac-256" && store.enc === "Dstu7624cbc-256"
+  );
+  if (strictProfile && ignoredBags.length > 0) {
+    throw pfxError("Unsupported key-bag content in Kupyna/Kalyna PFX");
+  }
+  if (strictProfile && !pfx.macData) {
+    throw pfxError(
+      "Authenticated MacData is required for Kupyna/Kalyna PFX"
+    );
+  }
+  if (pfx.macData) {
+    const iterations = pfx.macData.iterations ? pfx.macData.iterations.toNumber() : 1;
+    if (!Number.isSafeInteger(iterations) || iterations < 1 || iterations > MAX_KDF_ITERATIONS) {
+      throw pfxError("Invalid PFX MAC iteration count");
+    }
+    const pfxMac = {
+      algorithm: pfx.macData.mac.digestAlgorithm.algorithm,
+      salt: pfx.macData.macSalt,
+      iters: iterations,
+      digest: pfx.macData.mac.digest,
+      authenticatedSafe: pfx.authSafe.content
+    };
+    if (strictProfile && (pfxMac.algorithm !== "Dstu7564-256" || pfxMac.salt.length === 0 || pfxMac.salt.length > MAX_PBES2_SALT_LENGTH || pfxMac.digest.length !== 32)) {
+      throw pfxError("Invalid Kupyna/Kalyna PFX MacData");
+    }
+    if (strictProfile) {
+      if (stores.length > MAX_PFX_PROTECTED_STORES) {
+        throw pfxError("Too many protected stores in Kupyna/Kalyna PFX");
+      }
+      const totalIterations = stores.reduce(
+        (sum, store) => sum + store.iters,
+        pfxMac.iters
+      );
+      if (totalIterations > MAX_PFX_TOTAL_KDF_ITERATIONS) {
+        throw pfxError("Kupyna/Kalyna PFX exceeds total KDF work limit");
+      }
+    }
+    stores.forEach((store) => {
+      store.container = "PFX";
+      store.pfxMac = pfxMac;
+    });
+  } else {
+    stores.forEach((store) => {
+      store.container = "PFX";
+    });
+  }
+  return stores;
 }
 function certbags_from_asn1(data) {
   const bags = SafeContents.decode(data, "der");
@@ -2485,7 +2625,7 @@ var Priv = class {
     return detect_format(inp);
   }
   static from_protected(data, password, algo) {
-    let stores;
+    let stores, pfxError2;
     if (password && (!algo || !algo.storeload)) {
       throw new Error("Cant decode protected file without algo");
     }
@@ -2497,18 +2637,24 @@ var Priv = class {
       }
       try {
         stores = pfx_parse(data);
-      } catch (ignore) {
+      } catch (error) {
+        if (error.name === "PFXError") {
+          pfxError2 = error;
+        }
       }
       try {
         stores = [enc_parse(data)];
       } catch (ignore) {
+      }
+      if (pfxError2) {
+        throw pfxError2;
       }
       if (!stores) {
         throw new Error(
           "Cant parse store with either PBES2 or proprietaty format"
         );
       }
-      data = stores.map((part) => algo.storeload(part, password));
+      data = algo.storeloadall ? algo.storeloadall(stores, password) : stores.map((part) => algo.storeload(part, password));
     } else {
       data = [data];
     }
