@@ -2501,7 +2501,7 @@ var Priv = class {
     this.algorithm = "Dstu4145le";
   }
   help_sign(hash_v, rand_e) {
-    const eG = this.curve.base.mul(rand_e);
+    const eG = this.curve.base.mul(this.curve.pad_scalar(rand_e));
     if (eG.x.is_zero()) {
       return null;
     }
@@ -3065,6 +3065,21 @@ var Curve2 = class _Curve {
   }
   truncate(value) {
     return this.truncateTo(value, this.m);
+  }
+  /* Countermeasure against Minerva / TPM-FAIL timing-side-channel attacks.
+   * wNAF multiplication leaks the scalar bit length through the number of
+   * point doublings. Padding the scalar with the group order to a constant
+   * bit length (orderBits + 1) removes this signal at ~zero cost, since
+   * (k + t·n)·G = k·G.
+   */
+  pad_scalar(field_k) {
+    const big_order = new bn2.BN(this.order.buf8(), 8);
+    const big_k = new bn2.BN(field_k.buf8(), 8);
+    let padded = big_k.add(big_order);
+    if (padded.bitLength() === big_order.bitLength()) {
+      padded = padded.add(big_order);
+    }
+    return new field_default(padded.toArray(), "buf8", this);
   }
   contains(point) {
     let lh = point.x.add(this.a);
