@@ -11,7 +11,9 @@
     "prepare": "npm run build",
     "test": "vitest run",
     "cover": "npm run test -- --coverage",
-    "build": "tsdown lib/index.js -f cjs -f esm --clean --platform node --target es2015 --deps.never-bundle asn1.js --deps.never-bundle js-lzma --deps.never-bundle jksreader --deps.never-bundle gost89 --deps.never-bundle bn.js --deps.never-bundle buffer"
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "esbuild ./lib/index.js --bundle --platform=node --format=cjs --target=node14.18 --outfile=./dist/index.cjs --external:asn1.js --external:js-lzma --external:jksreader --external:gost89 --external:bn.js --external:buffer",
+    "build:esm": "esbuild ./lib/index.js --bundle --platform=node --format=esm --target=node14.18 --outfile=./dist/index.mjs --external:asn1.js --external:js-lzma --external:jksreader --external:gost89 --external:bn.js --external:buffer"
   },
   "repository": {
     "type": "git",
@@ -35,11 +37,9 @@
     "eslint-config-airbnb": "^17.1.0",
     "eslint-config-prettier": "^4.2.0",
     "eslint-plugin-import": "^2.14.0",
-    "eslint-plugin-jsx-a11y": "^6.1.2",
-    "eslint-plugin-react": "^7.11.1",
     "gost89": "^0.1.11",
     "prettier": "^1.17.0",
-    "tsdown": "^0.22.7",
+    "esbuild": "^0.25.5",
     "vite": "^6.3.5",
     "vitest": "^3.2.7"
   },
