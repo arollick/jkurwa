@@ -62,10 +62,10 @@ __export(models_exports, {
 });
 
 // lib/models/Certificate.js
-var import_asn19 = __toESM(require("asn1.js"));
+var import_asn19 = __toESM(require("asn1.js"), 1);
 
 // lib/curve.js
-var import_asn17 = __toESM(require("asn1.js"));
+var import_asn17 = __toESM(require("asn1.js"), 1);
 
 // lib/field.js
 var import_buffer = require("buffer");
@@ -74,7 +74,8 @@ var import_buffer = require("buffer");
 var gf2m_exports = {};
 __export(gf2m_exports, {
   blength: () => blength,
-  inv: () => finv,
+  inv_fast: () => finv_fast,
+  inv_slow: () => finv_fermat,
   mod: () => fmod,
   mul: () => fmul,
   mul_2x2: () => mul_2x2,
@@ -238,7 +239,10 @@ function fmod(a, p, ret) {
   let d1;
   let tmp_ulong;
   let j;
-  if (!ret) {
+  if (ret) {
+    ret_len = ret.length;
+    for (k = 0; k < ret_len; k++) ret[k] = a[k];
+  } else {
     ret_len = a.length;
     ret = new Uint32Array(ret_len);
     for (k = 0; k < ret_len; k++) ret[k] = a[k];
@@ -284,7 +288,7 @@ function fmod(a, p, ret) {
   }
   return ret;
 }
-function finv(a, p, ret) {
+function finv_fast(a, p, ret) {
   let b = new Uint32Array(a.length);
   let c = new Uint32Array(a.length);
   let v = new Uint32Array(a.length);
@@ -295,7 +299,10 @@ function finv(a, p, ret) {
   }
   let ubits = blength(u);
   let vbits = blength(v);
+  let iter = 1e3;
   while (1) {
+    iter--;
+    if (iter <= 0) throw new Error("Internal error, loop");
     if (ubits < 0) throw new Error("Internal error");
     while (ubits && !(u[0] & 1)) {
       let u0 = u[0];
@@ -339,6 +346,25 @@ function finv(a, p, ret) {
   }
   for (let idx = 0; idx < b.length; idx++) {
     ret[idx] = b[idx];
+  }
+}
+function finv_fermat(m, a, p, ret) {
+  const len = a.length * 2;
+  let x = new Uint32Array(len);
+  for (let i2 = 0; i2 < len; i2++) {
+    x[i2] = a[i2];
+  }
+  let temp = new Uint32Array(len);
+  for (let i2 = 0; i2 < m - 2; i2++) {
+    fmul(x, x, temp);
+    fmod(temp, p, x);
+    fmul(x, a, temp);
+    fmod(temp, p, x);
+  }
+  fmul(x, x, temp);
+  fmod(temp, p, x);
+  for (let i2 = 0; i2 < len; i2++) {
+    ret[i2] = x[i2];
   }
 }
 
@@ -426,13 +452,20 @@ var Field = class _Field {
     return diff === 0;
   }
   less(other) {
-    let blen = this.length, olen = other.length, idx, bb = this.bytes, diff = 0, ob = other.bytes;
-    while (ob[olen - 1] === 0) olen--;
-    while (bb[blen - 1] === 0) blen--;
-    if (olen > blen) {
+    let blen = this.length, olen = other.length, bb = this.bytes, ob = other.bytes;
+    while (olen > 0 && ob[olen - 1] === 0) olen--;
+    while (blen > 0 && bb[blen - 1] === 0) blen--;
+    if (blen < olen) {
       return true;
     }
-    return bb[blen] < ob[olen];
+    if (olen < blen) {
+      return false;
+    }
+    for (let i2 = blen - 1; i2 >= 0; i2--) {
+      if (bb[i2] < ob[i2]) return true;
+      if (bb[i2] > ob[i2]) return false;
+    }
+    return false;
   }
   bitLength() {
     return blength(this.bytes);
@@ -535,7 +568,11 @@ var Field = class _Field {
   invert(inplace, _reuse_buf) {
     let a = impl.mod(this.bytes, this.mod_bits);
     let p = this.curve.calc_modulus(this.mod_bits);
-    impl.inv(a, p, a);
+    if (this.curve.m == 191) {
+      impl.inv_slow(this.curve.m, a, this.mod_bits, a);
+    } else {
+      impl.inv_fast(a, p, a);
+    }
     return new _Field(a, void 0, this.curve);
   }
   static detect_format(in_value) {
@@ -1018,7 +1055,7 @@ var mulPos2 = mulPos;
 var getWindowSize2 = getWindowSize;
 
 // lib/models/Priv.js
-var import_asn16 = __toESM(require("asn1.js"));
+var import_asn16 = __toESM(require("asn1.js"), 1);
 
 // lib/util.js
 function add_zero(u8, reorder) {
@@ -1094,7 +1131,7 @@ function maybeHex(inp, pad) {
 }
 
 // lib/rand.js
-var import_node_crypto = __toESM(require("node:crypto"));
+var import_node_crypto = __toESM(require("node:crypto"), 1);
 function rand_default(xb) {
   const ret = import_node_crypto.default.rng(xb.length);
   for (let i2 = 0; i2 < xb.length; i2++) {
@@ -1225,7 +1262,7 @@ __export(dstszi2010_exports, {
   PKCS7_CONTENT_TYPES: () => PKCS7_CONTENT_TYPES,
   SharedInfo: () => SharedInfo
 });
-var import_asn12 = __toESM(require("asn1.js"));
+var import_asn12 = __toESM(require("asn1.js"), 1);
 
 // lib/spec/rfc3280.js
 var rfc3280_exports = {};
@@ -1253,7 +1290,7 @@ __export(rfc3280_exports, {
   Version: () => Version,
   injectPubAlgo: () => injectPubAlgo
 });
-var import_asn1 = __toESM(require("asn1.js"));
+var import_asn1 = __toESM(require("asn1.js"), 1);
 var CRLReason = import_asn1.default.define("CRLReason", function() {
   this.enum({
     0: "unspecified",
@@ -1771,7 +1808,7 @@ var defaultSbox = import_buffer4.Buffer.from(
 var DEFAULT_SBOX_COMPRESSED = packSbox(defaultSbox);
 
 // lib/spec/pbes.js
-var import_asn13 = __toESM(require("asn1.js"));
+var import_asn13 = __toESM(require("asn1.js"), 1);
 var CipherParams = ContentEncryptionAlgorithmIdentifier;
 var ContentInfo2 = ContentInfo;
 var MAX_PBES2_SALT_LENGTH = 1024;
@@ -1934,10 +1971,12 @@ var pbes2_serialize = function(store) {
     "der"
   );
 };
+PBES2.obj_parse = pbes2_parse_asn1;
+PBES2.pbes2_parse = pbes2_parse;
 var pbes_default = PBES2;
 
 // lib/spec/pfx.js
-var import_asn14 = __toESM(require("asn1.js"));
+var import_asn14 = __toESM(require("asn1.js"), 1);
 var OID2 = {
   "1 2 840 113549 1 12 10 1 2": "pkcs-12-pkcs-8ShroudedKeyBag",
   "1 2 840 113549 1 12 10 1 3": "pkcs-12-certBag",
@@ -2100,7 +2139,7 @@ function certbags_from_asn1(data) {
 }
 
 // lib/spec/keystore.js
-var import_asn15 = __toESM(require("asn1.js"));
+var import_asn15 = __toESM(require("asn1.js"), 1);
 var OID3 = {
   "1 2 804 2 1 1 1 1 3 1 1": "DSTU_4145_LE",
   "1 3 6 1 4 1 19398 1 1 2 3": "DSTU_4145_KEY_BITS",
@@ -2226,6 +2265,9 @@ var enc_parse = function(data) {
     body: asn116.cryptData
   };
 };
+var enc_parse_many = function(data) {
+  return [enc_parse(data)];
+};
 
 // lib/models/Pub.js
 var import_buffer5 = require("buffer");
@@ -2273,8 +2315,8 @@ var Pub = class _Pub {
     if (pointR.is_zero()) {
       throw new Error("Invalid sig R point at infinity");
     }
-    let r1 = pointR.x.mod_mul(hash_val);
-    r1 = this.curve.truncate(r1);
+    let r1 = pointR.x.mod_mul(this.curve.truncate(hash_val));
+    r1 = this.curve.truncateTo(r1, this.curve.order.bitLength() - 1);
     return r.equals(r1);
   }
   validate() {
@@ -2463,17 +2505,22 @@ var Priv = class {
     if (eG.x.is_zero()) {
       return null;
     }
+    hash_v = this.curve.truncate(hash_v);
     let r = hash_v.mod_mul(eG.x);
-    r = this.curve.truncate(r);
     if (r.is_zero()) {
       return null;
     }
-    r = new bn.BN(r.buf8(), 8);
     const big_d = new bn.BN(this.d.buf8(), 8);
     const big_rand_e = new bn.BN(rand_e.buf8(), 8);
     const big_order = new bn.BN(this.curve.order.buf8(), 8);
+    const l = this.curve.order.bitLength() - 1;
+    const modL = new bn.BN(1).shln(l);
+    r = new bn.BN(r.buf8(), 8).mod(modL);
     let s = big_d.mul(r).mod(big_order);
     s = s.add(big_rand_e).mod(big_order);
+    if (s.cmpn(0) === 0) {
+      return null;
+    }
     return {
       s: new Field(s.toArray(), "buf8", this.curve),
       r: new Field(r.toArray(), "buf8", this.curve)
@@ -2626,35 +2673,17 @@ var Priv = class {
     return detect_format(inp);
   }
   static from_protected(data, password, algo) {
-    let stores, pfxError2;
+    let stores;
     if (password && (!algo || !algo.storeload)) {
       throw new Error("Cant decode protected file without algo");
     }
     data = maybe_pem(data);
     if (password) {
-      try {
-        stores = pbes2_parse(data);
-      } catch (ignore) {
-      }
-      try {
-        stores = pfx_parse(data);
-      } catch (error) {
-        if (error.name === "PFXError") {
-          pfxError2 = error;
-        }
-      }
-      try {
-        stores = [enc_parse(data)];
-      } catch (ignore) {
-      }
-      if (pfxError2) {
-        throw pfxError2;
-      }
-      if (!stores) {
-        throw new Error(
-          "Cant parse store with either PBES2 or proprietaty format"
-        );
-      }
+      stores = parseWithFn(data, [
+        pbes2_parse,
+        pfx_parse,
+        enc_parse_many
+      ]);
       data = algo.storeloadall ? algo.storeloadall(stores, password) : stores.map((part) => algo.storeload(part, password));
     } else {
       data = [data];
@@ -2677,6 +2706,19 @@ function merge_stores(list) {
   }
   return ret;
 }
+function parseWithFn(data, parserFns) {
+  for (let idx = 0; idx < parserFns.length; idx++) {
+    try {
+      const ret = parserFns[idx](data);
+      if (ret) return ret;
+    } catch (e) {
+      if (e.name === "PFXError") {
+        throw e;
+      }
+    }
+  }
+  throw new Error("Cant parse store with either PBES2 or proprietaty format");
+}
 function guessStore(data) {
   try {
     return Priv.from_asn1(data, true);
@@ -2689,6 +2731,7 @@ var Priv_default = Priv;
 // lib/standard.js
 var standard_exports = {};
 __export(standard_exports, {
+  DSTU_PB_191: () => DSTU_PB_191,
   DSTU_PB_257: () => DSTU_PB_257,
   DSTU_PB_431: () => DSTU_PB_431,
   cache: () => cache
@@ -2704,6 +2747,18 @@ var DSTU_PB_257 = {
   kofactor: [4],
   m: 257,
   ks: [12]
+};
+var DSTU_PB_191 = {
+  a: "1",
+  b: "7bc86e2102902ec4d5890e8b6b4981ff27e0482750fefc03",
+  base: {
+    x: "714114b762f2ff4a7912a6d2ac58b9b5c2fcfe76daeb7129",
+    y: "29c41e568b77c617efe5902f11db96fa9613cd8d03db08da"
+  },
+  order: "40000000000000000000000069a779cac1dabc6788f7474f",
+  kofactor: [2],
+  m: 191,
+  ks: [9]
 };
 var DSTU_PB_431 = {
   a: "1",
@@ -2843,6 +2898,8 @@ function fsquad_odd(value, curve) {
   }
   const val_w = val_z.mod_mul(val_z);
   val_w.addM(val_z);
+  val_a.shiftRightM(1);
+  val_w.shiftRightM(1);
   if (val_w.equals(val_a)) {
     return val_z;
   }
@@ -3000,15 +3057,14 @@ var Curve2 = class _Curve {
   point(px, py) {
     return new Point(this, px, py);
   }
+  truncateTo(value, bits) {
+    const big = new bn2.BN(value.buf8(), 8);
+    const mod = new bn2.BN(1).shln(bits);
+    const truncated = big.mod(mod);
+    return new field_default(truncated.toArray(), "buf8", this);
+  }
   truncate(value) {
-    const bitl_o = this.order.bitLength();
-    let xbit = value.bitLength();
-    let ret = value;
-    while (bitl_o <= xbit) {
-      ret = ret.clearBit(xbit - 1);
-      xbit = ret.bitLength();
-    }
-    return ret;
+    return this.truncateTo(value, this.m);
   }
   contains(point) {
     let lh = point.x.add(this.a);
@@ -3142,7 +3198,7 @@ function pkey(curve_name, key_data, key_fmt) {
 var std_curve = (id) => Curve2.from_id(id);
 
 // lib/util/str.js
-var import_asn18 = __toESM(require("asn1.js"));
+var import_asn18 = __toESM(require("asn1.js"), 1);
 function encodeUtf8Str(input, encoder) {
   const UTF8STR = import_asn18.default.define("UTF8STR", function UTF8STR2() {
     this.utf8str();
@@ -3547,7 +3603,7 @@ var Certificate_default = Certificate2;
 var import_buffer9 = require("buffer");
 
 // lib/spec/rfc3161-tsp.js
-var import_asn110 = __toESM(require("asn1.js"));
+var import_asn110 = __toESM(require("asn1.js"), 1);
 var TimeStampReq = import_asn110.default.define("TimeStampReq", function() {
   this.seq().obj(
     this.key("version").int({ 1: "v1" }),
@@ -3604,10 +3660,10 @@ var rfc3161_tsp_default = {
 };
 
 // lib/spec/rfc5035-certid.js
-var import_asn112 = __toESM(require("asn1.js"));
+var import_asn112 = __toESM(require("asn1.js"), 1);
 
 // lib/spec/rfc4210-cmp.js
-var import_asn111 = __toESM(require("asn1.js"));
+var import_asn111 = __toESM(require("asn1.js"), 1);
 var OtherName = import_asn111.default.define("OtherName", function() {
   this.seq().obj(this.key("type-id").objid(), this.key("value").any());
 });
@@ -3800,7 +3856,7 @@ SigningCertificateV2.wrap = function(cert, hash) {
 var import_buffer8 = require("buffer");
 
 // lib/util/packed_xml.js
-var import_js_lzma = __toESM(require("js-lzma"));
+var import_js_lzma = __toESM(require("js-lzma"), 1);
 var import_buffer7 = require("buffer");
 var Stream = {
   inStream: function(data) {
@@ -4119,10 +4175,10 @@ var useContentTsp = (value) => ["all", "content"].includes(value);
 var useSignatureTsp = (value) => ["all", "signature"].includes(value);
 
 // lib/spec/rfc5126-cades.js
-var import_asn114 = __toESM(require("asn1.js"));
+var import_asn114 = __toESM(require("asn1.js"), 1);
 
 // lib/spec/rfc2560-ocsp.js
-var import_asn113 = __toESM(require("asn1.js"));
+var import_asn113 = __toESM(require("asn1.js"), 1);
 var OCSPRequest = import_asn113.default.define("OCSPRequest", function() {
   this.seq().obj(
     this.key("tbsRequest").use(TBSRequest),
@@ -4976,7 +5032,7 @@ var Message = class _Message {
 var Message_default = Message;
 
 // lib/app/keycoder.js
-var import_asn115 = __toESM(require("asn1.js"));
+var import_asn115 = __toESM(require("asn1.js"), 1);
 var import_buffer10 = require("buffer");
 var Keycoder = class {
   constructor() {
@@ -5026,8 +5082,8 @@ function guess_parse(indata) {
 var keycoder_default = Keycoder;
 
 // lib/util/load.js
-var import_fs = __toESM(require("fs"));
-var import_jksreader = __toESM(require("jksreader"));
+var import_fs = __toESM(require("fs"), 1);
+var import_jksreader = __toESM(require("jksreader"), 1);
 
 // lib/util/complain.js
 var EOLD = class extends Error {
@@ -5106,7 +5162,6 @@ function load(keyinfo, algo) {
 var load_default = load;
 
 // lib/services/tsp.js
-var import_gost89 = __toESM(require("gost89"));
 function getStampCb(cert, hashedMessage, query, cb, errorCb) {
   var tsp = rfc3161_tsp_default.TimeStampReq.encode(
     {

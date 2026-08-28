@@ -1,8 +1,8 @@
 {
   "name": "jkurwa",
-  "version": "1.22.0",
+  "version": "1.22.7",
   "description": "Ukrainian national EC cryptography (DSTU-4145) implementaion",
-  "type": "commonjs",
+  "type": "module",
   "main": "dist/index.cjs",
   "browser": {
     "./lib/rand.js": "./lib/rand.browser.js"
@@ -12,8 +12,10 @@
     "test": "vitest run",
     "test:local-provider": "node test/require-local-provider.js && vitest run test/test-store-provider.js",
     "cover": "npm run test -- --coverage",
-    "build": "esbuild ./lib/index.js --bundle --platform=node --format=cjs --outfile=./dist/index.cjs --external:asn1.js --external:js-lzma --external:js-sha1 --external:jksreader --external:gost89"
-     },
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "esbuild ./lib/index.js --bundle --platform=node --format=cjs --target=node14.18 --outfile=./dist/index.cjs --external:asn1.js --external:js-lzma --external:jksreader --external:gost89 --external:bn.js --external:buffer",
+    "build:esm": "esbuild ./lib/index.js --bundle --platform=node --format=esm --target=node14.18 --outfile=./dist/index.mjs --external:asn1.js --external:js-lzma --external:jksreader --external:gost89 --external:bn.js --external:buffer"
+  },
   "repository": {
     "type": "git",
     "url": "git@github.com:dstucrypt/jkurwa"
@@ -32,7 +34,6 @@
   "homepage": "https://github.com/dstucrypt/jkurwa/",
   "devDependencies": {
     "codecov": "^3.8.1",
-    "esbuild": "^0.25.5",
     "eslint": "^5.9.0",
     "eslint-config-airbnb": "^17.1.0",
     "eslint-config-prettier": "^4.2.0",
@@ -41,8 +42,9 @@
     "eslint-plugin-react": "^7.11.1",
     "gost89": "^0.1.11",
     "prettier": "^1.17.0",
+    "esbuild": "^0.25.5",
     "vite": "^6.3.5",
-    "vitest": "^3.2.1"
+    "vitest": "^3.2.7"
   },
   "dependencies": {
     "asn1.js": "muromec/asn1.js",
@@ -56,5 +58,13 @@
       "airbnb",
       "prettier"
     ]
+  },
+  "module": "dist/index.mjs",
+  "exports": {
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.cjs"
+    }
   }
 }
