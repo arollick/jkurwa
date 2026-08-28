@@ -1992,7 +1992,8 @@ var DigestInfo = import_asn14.default.define("DigestInfo", function() {
   this.seq().obj(
     this.key("digestAlgorithm").seq().obj(
       this.key("algorithm").objid({
-        "1 2 804 2 1 1 1 1 2 2 1": "Dstu7564-256"
+        "1 2 804 2 1 1 1 1 2 2 1": "Dstu7564-256",
+        "1 2 804 2 1 1 1 1 2 1": "Gost34311"
       }),
       this.key("parameters").optional().any()
     ),
@@ -2067,7 +2068,7 @@ function pfx_parse(data) {
       digest: pfx.macData.mac.digest,
       authenticatedSafe: pfx.authSafe.content
     };
-    if (strictProfile && (pfxMac.algorithm !== "Dstu7564-256" || pfxMac.salt.length === 0 || pfxMac.salt.length > MAX_PBES2_SALT_LENGTH || pfxMac.digest.length !== 32)) {
+    if (strictProfile && (pfxMac.algorithm !== "Dstu7564-256" && pfxMac.algorithm !== "Gost34311" || pfxMac.salt.length === 0 || pfxMac.salt.length > MAX_PBES2_SALT_LENGTH || pfxMac.digest.length !== 32)) {
       throw pfxError("Invalid Kupyna/Kalyna PFX MacData");
     }
     if (strictProfile) {

@@ -72,7 +72,9 @@ const TestMacData = asn1.define("TestMacData", function() {
           .seq()
           .obj(
             this.key("algorithm").objid({
-              "1 2 804 2 1 1 1 1 2 2 1": "Dstu7564-256"
+              "1 2 804 2 1 1 1 1 2 2 1": "Dstu7564-256",
+              "1 2 804 2 1 1 1 1 2 1": "Gost34311",
+              "1 2 3 4": "unknown"
             }),
             this.key("parameters").null_()
           ),
@@ -123,7 +125,7 @@ function testMacData(overrides = {}) {
   return {
     mac: {
       digestAlgorithm: {
-        algorithm: "Dstu7564-256",
+        algorithm: overrides.algorithm || "Dstu7564-256",
         parameters: null
       },
       digest: overrides.digest || Buffer.alloc(32, 0x55)
@@ -220,6 +222,36 @@ describe("Keycoder", () => {
       assert.equal(store.pfxMac.digest.length, 32);
       assert.equal(store.pfxMac.salt.length, 20);
       assert.equal(store.pfxMac.iters, 10000);
+    });
+
+    it("should hand off UAPKI GOST 34.311 outer MacData", () => {
+      const [store] = pfx.pfx_parse(
+        wrapPfx(
+          kupynaPbes2(),
+          testMacData({
+            algorithm: "Gost34311",
+            macSalt: Buffer.alloc(32, 0x66),
+            iterations: 1000
+          })
+        )
+      );
+      assert.equal(store.pfxMac.algorithm, "Gost34311");
+      assert.equal(store.pfxMac.digest.length, 32);
+      assert.equal(store.pfxMac.salt.length, 32);
+      assert.equal(store.pfxMac.iters, 1000);
+    });
+
+    it("should reject an unknown strict-profile outer MAC algorithm", () => {
+      assert.throws(
+        () =>
+          pfx.pfx_parse(
+            wrapPfx(
+              kupynaPbes2(),
+              testMacData({ algorithm: "unknown" })
+            )
+          ),
+        /Invalid Kupyna\/Kalyna PFX MacData/
+      );
     });
 
     it("should pass the Kupyna/Kalyna metadata to the store provider", () => {

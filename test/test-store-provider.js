@@ -58,7 +58,8 @@ const MacData = asn1.define("ProviderTestMacData", function() {
           .seq()
           .obj(
             this.key("algorithm").objid({
-              "1 2 804 2 1 1 1 1 2 2 1": "Dstu7564-256"
+              "1 2 804 2 1 1 1 1 2 2 1": "Dstu7564-256",
+              "1 2 804 2 1 1 1 1 2 1": "Gost34311"
             }),
             this.key("parameters").null_()
           ),
@@ -162,6 +163,7 @@ describe("local Kupyna/Kalyna provider integration", () => {
     );
     const macSalt = Buffer.alloc(20, 0x33);
     const mac = provider.pfx_mac(password, {
+      algorithm: "Dstu7564-256",
       salt: macSalt,
       iters: iterations,
       authenticatedSafe
@@ -191,6 +193,48 @@ describe("local Kupyna/Kalyna provider integration", () => {
       () =>
         jk.Priv.from_protected(
           pfx,
+          "deterministically-wrong-password",
+          provider.algos()
+        ),
+      /Invalid PFX password or integrity check/
+    );
+
+    const gostMacSalt = Buffer.alloc(32, 0x44);
+    const gostMac = provider.pfx_mac(password, {
+      algorithm: "Gost34311",
+      salt: gostMacSalt,
+      iters: iterations,
+      authenticatedSafe
+    });
+    const gostPfx = PFX.encode(
+      {
+        version: 3,
+        authSafe: { contentType: "data", content: authenticatedSafe },
+        macData: {
+          mac: {
+            digestAlgorithm: {
+              algorithm: "Gost34311",
+              parameters: null
+            },
+            digest: gostMac
+          },
+          macSalt: gostMacSalt,
+          iterations
+        }
+      },
+      "der"
+    );
+
+    const gostLoaded = jk.Priv.from_protected(
+      gostPfx,
+      password,
+      provider.algos()
+    );
+    assert.deepEqual(gostLoaded.keys, [priv]);
+    assert.throws(
+      () =>
+        jk.Priv.from_protected(
+          gostPfx,
           "deterministically-wrong-password",
           provider.algos()
         ),
