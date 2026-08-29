@@ -1312,6 +1312,7 @@ var ALGORITHMS_IDS = {
   "1 2 804 2 1 1 1 1 1 1 5": "Gost28147-cfb-wrap",
   "1 2 804 2 1 1 1 1 1 2": "Gost34311-hmac",
   "1 2 804 2 1 1 1 1 3 1 1": "Dstu4145le",
+  "1 2 804 2 1 1 1 1 3 6 1 1": "Dstu4145le-Dstu7564-256",
   "1 2 840 10045 2 1": "ECDSA",
   "1 2 840 10045 4 3 2": "ECDSA-SHA256"
 };
@@ -4473,7 +4474,7 @@ var OcspResponse = class _OcspResponse {
     const responder = queryFn(responderID.value);
     const responderOk = responder.verify(
       { time: status.thisUpdate, usage: "ocspSigning" },
-      { Dstu4145le: ctx.hashFn },
+      ctx.hashFuncs || { Dstu4145le: ctx.hashFn },
       ctx.lookupCA
     );
     if (!responderOk) {
@@ -4486,7 +4487,8 @@ var OcspResponse = class _OcspResponse {
       throw new OCSPError();
     }
     const tbs = ResponseData.encode(response.tbsResponseData, "der");
-    const isValid = responder.pubkey_unpack().verify(ctx.hashFn(tbs), response.signature.data);
+    const signatureHash = (ctx.hashFuncs || {})[response.signatureAlgorithm.algorithm] || ctx.hashFn;
+    const isValid = responder.pubkey_unpack().verify(signatureHash(tbs), response.signature.data);
     if (!isValid) {
       throw new OCSPError();
     }
@@ -4877,7 +4879,8 @@ var Message = class _Message {
         hash_f,
         lookupCert,
         lookupCA,
-        "content"
+        "content",
+        opts.hashes
       );
     }
     if (useSignatureTsp(opts.tsp)) {
@@ -4886,7 +4889,8 @@ var Message = class _Message {
         hash_f,
         lookupCert,
         lookupCA,
-        "signature"
+        "signature",
+        opts.hashes
       );
     }
     return ok;
@@ -4906,18 +4910,18 @@ var Message = class _Message {
     const x509 = this.signer(lookupCert);
     return time >= x509.valid.from && time <= x509.valid.to;
   }
-  verifyTimestampToken(msg, hash_f, lookupCert, lookupCA, imprintOf) {
+  verifyTimestampToken(msg, hash_f, lookupCert, lookupCA, imprintOf, hashes) {
     if (!msg) {
       return true;
     }
-    const isSigned = msg.verify(hash_f, lookupCert, lookupCA);
+    const isSigned = msg.verify(hash_f, lookupCert, lookupCA, { hashes });
     if (!isSigned) {
       return false;
     }
     const token = rfc3161_tsp_default.TSTInfo.decode(msg.content, "der");
     const signerValid = msg.signer(lookupCert).verify(
       { time: token.genTime, usage: "timeStamping" },
-      { Dstu4145le: hash_f },
+      hashes || { Dstu4145le: hash_f },
       lookupCA
     );
     if (!signerValid) {
@@ -4991,7 +4995,9 @@ var Message = class _Message {
     return ri.value.recipientEncryptedKeys[0].rid;
   }
   verify(hash_f, lookupCert, lookupCA, opts = {}) {
-    const hash = this.mhash(hash_f);
+    const signatureAlgorithm = this.info.signerInfos[0].digestEncryptionAlgorithm.algorithm;
+    const signatureHash = (opts.hashes || {})[signatureAlgorithm] || hash_f;
+    const hash = this.mhash(signatureHash);
     if (!this.verifyAttrs(hash_f, lookupCert, lookupCA, opts)) {
       return false;
     }
@@ -5372,7 +5378,14 @@ var Box = class _Box {
     return {
       query: this.query,
       lookupCA: this.lookupCA.bind(this),
-      hashFn: this.algo.hash
+      hashFn: this.algo.hash,
+      hashFuncs: this.hashFuncs
+    };
+  }
+  get hashFuncs() {
+    return {
+      Dstu4145le: this.algo.hash,
+      "Dstu4145le-Dstu7564-256": this.algo.hashDstu7564
     };
   }
   loadMaterial(info) {
@@ -5535,7 +5548,7 @@ var Box = class _Box {
     }
     const ret = cert.verify(
       { time, usage },
-      { Dstu4145le: this.algo.hash },
+      this.hashFuncs,
       this.lookupCA.bind(this)
     );
     this.verifiedCache[sidHex] = { ret, ctime: Date.now() };
