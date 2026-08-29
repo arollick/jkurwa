@@ -3608,8 +3608,9 @@ ${b64_encode(this.to_asn1(), {
     return usages.includes(op);
   }
   get ocspLink() {
-    const { id, link } = this.extension.authorityInfoAccess;
-    return id === "ocsp" ? link : null;
+    const aia = this.extension.authorityInfoAccess;
+    if (!aia) return null;
+    return aia.ocsp || (aia.id === "ocsp" ? aia.link : null);
   }
 };
 var Certificate_default = Certificate2;
@@ -5432,10 +5433,7 @@ var Box = class _Box {
       const calist = this.cas[idx];
       for (let ca of calist) {
         const cert = new Certificate_default(ca);
-        if (!cert.extension.authorityInfoAccess || cert.extension.authorityInfoAccess.id !== "ocsp") {
-          continue;
-        }
-        const url = cert.extension.authorityInfoAccess.link;
+        const url = cert.ocspLink;
         if (url && !ret.includes(url)) {
           ret.push(url);
         }

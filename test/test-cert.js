@@ -113,7 +113,27 @@ describe("Certificate", () => {
         issuers: "http://acskidd.gov.ua/download/certificates/allacskidd.p7b",
         link: "http://acskidd.gov.ua/services/ocsp/"
       });
+      assert.equal(cert.ocspLink, "http://acskidd.gov.ua/services/ocsp/");
       assert.deepEqual(info.usage, { sign: true, encrypt: false });
+    });
+
+    it("should use OCSP URL when issuers is the first AIA entry", () => {
+      const ocspLink = Object.getOwnPropertyDescriptor(
+        Object.getPrototypeOf(cert),
+        "ocspLink"
+      ).get;
+      assert.equal(
+        ocspLink.call({
+          extension: {
+            authorityInfoAccess: {
+              id: "issuers",
+              link: "http://ca.example.test/chain.p7b",
+              ocsp: "http://ca.example.test/ocsp"
+            }
+          }
+        }),
+        "http://ca.example.test/ocsp"
+      );
     });
 
     it("should serialize back", () => {
