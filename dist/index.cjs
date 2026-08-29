@@ -5681,24 +5681,42 @@ var Box = class _Box {
       }
     }
     if (opts.ocsp) {
-      let ocspResponses = await Promise.all(
-        message.signedWithCerts.map(async (query) => {
-          const lookup3 = this.lookupCert.bind(this, [key.cert]);
-          const cert = this.lookupCertOrSibling(lookup3, query);
-          if (!cert) {
-            return null;
+      const lookup3 = this.lookupCert.bind(this, [key.cert]);
+      const targets = [];
+      const addTarget = (cert, serial) => {
+        if (!cert || !cert.ocspLink) {
+          return;
+        }
+        const keyId = `${cert.rdnSerial()}@${serial.toString(16)}`;
+        if (!targets.some((target) => target.keyId === keyId)) {
+          targets.push({ cert, serial, keyId });
+        }
+      };
+      for (let query of message.signedWithCerts) {
+        const cert = this.lookupCertOrSibling(lookup3, query);
+        if (!cert) {
+          continue;
+        }
+        addTarget(cert, query.serialNumber || cert.serial);
+        if (opts.ocsp === "all") {
+          for (let issuer of cert.getCompleteChain(this.lookupCA.bind(this))) {
+            addTarget(issuer, issuer.serial);
           }
+        }
+      }
+      let ocspResponses = await Promise.all(
+        targets.map(async ({ cert, serial }) => {
           const nonce = rand_default(Buffer.alloc(20));
           const response = await lookup(
             cert,
-            query.serialNumber || cert.serial,
+            serial,
             nonce,
             this.ocspCtx
           );
           const info = response.verify(
             this.ocspCtx,
             cert,
-            query.serialNumber,
+            serial,
             nonce,
             false
           );
