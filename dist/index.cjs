@@ -5662,7 +5662,17 @@ var Box = class _Box {
       message.addSignatureToken(tspB);
     }
     if (opts.includeChain) {
-      const chain = key.cert.getCompleteChain(this.lookupCA.bind(this));
+      let chain = key.cert.getCompleteChain(this.lookupCA.bind(this));
+      if (opts.includeChain === "all") {
+        const certs = /* @__PURE__ */ new Map();
+        for (let list of Object.values(this.cas)) {
+          for (let certOb of list) {
+            const cert = new Certificate_default(certOb);
+            certs.set(cert.extension.subjectKeyIdentifier.toString("hex"), cert);
+          }
+        }
+        chain = [...certs.values()];
+      }
       message.addCertRefs(
         chain.map((cert) => CertificateRef_default.fromCert(cert, this.algo.hash))
       );
