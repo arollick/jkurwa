@@ -4392,7 +4392,7 @@ var RevocationRefs = import_asn114.default.define("CompleteRevocationRefs", func
 var OtherCertID = import_asn114.default.define("OtherCertID", function() {
   this.seq().obj(
     this.key("otherCertHash").use(OtherHashAlgAndValue),
-    this.key("issuerSerial").optional().use(IssuerAndSerialNumber)
+    this.key("issuerSerial").optional().use(IssuerSerial)
   );
 });
 var CompleteCertificateRefs = import_asn114.default.define(
@@ -4567,7 +4567,15 @@ var CertificateRef = class _CertificateRef {
         },
         hashValue: hashFn(cert.to_asn1())
       },
-      issuerSerial: cert.nameSerial()
+      issuerSerial: {
+        issuer: [
+          {
+            type: "directoryName",
+            value: cert.ob.tbsCertificate.issuer
+          }
+        ],
+        serialNumber: cert.ob.tbsCertificate.serialNumber
+      }
     });
   }
   static toCades(list) {
