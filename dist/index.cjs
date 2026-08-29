@@ -4497,12 +4497,6 @@ var OcspResponse = class _OcspResponse {
     if (!responderOk) {
       throw new OCSPError();
     }
-    const signedBySame = responder.extension.authorityKeyIdentifier.equals(
-      cert.extension.authorityKeyIdentifier
-    );
-    if (!signedBySame) {
-      throw new OCSPError();
-    }
     const tbs = ResponseData.encode(response.tbsResponseData, "der");
     const signatureHash = (ctx.hashFuncs || {})[response.signatureAlgorithm.algorithm] || ctx.hashFn;
     const isValid = responder.pubkey_unpack().verify(signatureHash(tbs), response.signature.data);
