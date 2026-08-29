@@ -5,6 +5,8 @@ import { loadAsset, loadPriv, loadCert, assertEqualSaved } from "./utils.js";
 
 import * as jk from "../lib/index.js";
 import Message from "../lib/models/Message.js";
+import rfc3161 from "../lib/spec/rfc3161-tsp.js";
+import { getStamp } from "../lib/services/tsp.js";
 
 describe("Signed Message", () => {
   const key1 = loadPriv("PRIV1.cer");
@@ -52,6 +54,49 @@ describe("Signed Message", () => {
     assert.equal(message.wrap.content.contentInfo.content, undefined);
     const [signInfo] = message.wrap.content.signerInfos;
     assert.deepEqual(signInfo.encryptedDigest, sign);
+  });
+
+  it("should sign Kupyna-profile CMS using matching algorithm identifiers", () => {
+    const kupynaHash = data => algo.hash(data);
+    kupynaHash.algo = "Dstu7564-256";
+    const hashes = {
+      Gost34311: algo.hash,
+      Dstu4145le: algo.hash,
+      "Dstu7564-256": kupynaHash,
+      "Dstu4145le-Dstu7564-256": kupynaHash
+    };
+    const message = new Message({
+      type: "signedData",
+      cert,
+      data,
+      hash: kupynaHash,
+      digestAlgorithm: "Dstu7564-256",
+      signatureAlgorithm: "Dstu4145le-Dstu7564-256",
+      signTime: time,
+      signer: key1
+    });
+    const [signInfo] = message.wrap.content.signerInfos;
+
+    assert.equal(message.wrap.content.digestAlgorithms[0].algorithm, "Dstu7564-256");
+    assert.equal(signInfo.digestAlgorithm.algorithm, "Dstu7564-256");
+    assert.equal(signInfo.digestEncryptionAlgorithm.algorithm, "Dstu4145le-Dstu7564-256");
+    assert.equal(message.verify(algo.hash, () => cert, null, { hashes }), true);
+  });
+
+  it("should request a Kupyna timestamp imprint", async () => {
+    let request;
+    await getStamp(
+      { extension: { subjectInfoAccess: { link: "http://tsp.test" } } },
+      Buffer.alloc(32, 1),
+      (method, url, headers, body, callback) => {
+        request = body;
+        callback(null);
+      },
+      "Dstu7564-256"
+    ).catch(() => {});
+
+    const parsed = rfc3161.TimeStampReq.decode(request, "der");
+    assert.equal(parsed.messageImprint.hashAlgorithm.algorithm, "Dstu7564-256");
   });
 
   it("should serialize to asn1 buffer", () => {

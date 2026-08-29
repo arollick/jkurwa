@@ -1307,6 +1307,7 @@ var CRLReason = import_asn1.default.define("CRLReason", function() {
 });
 var ALGORITHMS_IDS = {
   "1 2 804 2 1 1 1 1 2 1": "Gost34311",
+  "1 2 804 2 1 1 1 1 2 2 1": "Dstu7564-256",
   "1 2 804 2 1 1 1 1 1 1 3": "Gost28147-cfb",
   "1 2 804 2 1 1 1 1 3 4": "dhSinglePass-cofactorDH-gost34311kdf",
   "1 2 804 2 1 1 1 1 1 1 5": "Gost28147-cfb-wrap",
@@ -2696,7 +2697,21 @@ var Priv = class {
     } else {
       data = [data];
     }
-    return merge_stores(data.map(guessStore));
+    const parsedStores = data.map(guessStore);
+    if (stores) {
+      parsedStores.forEach((store, index) => {
+        const protectedStore = stores[index];
+        if (protectedStore && protectedStore.kdf === "Dstu7564mac-256" && protectedStore.enc === "Dstu7624cbc-256") {
+          store.keys.forEach((key) => {
+            Object.defineProperty(key, "signAlgorithm", {
+              value: "Dstu4145le-Dstu7564-256",
+              configurable: true
+            });
+          });
+        }
+      });
+    }
+    return merge_stores(parsedStores);
   }
   static sign_serialise(data, fmt) {
     return sign_serialise(data, fmt);
@@ -4544,11 +4559,11 @@ var CertificateRef = class _CertificateRef {
   constructor(ob) {
     this.ob = ob;
   }
-  static fromCert(cert, hashFn) {
+  static fromCert(cert, hashFn, hashAlgorithm) {
     return new _CertificateRef({
       otherCertHash: {
         hashAlgorithm: {
-          algorithm: hashFn.algo || "Gost34311"
+          algorithm: hashAlgorithm || hashFn.algo || "Gost34311"
         },
         hashValue: hashFn(cert.to_asn1())
       },
@@ -4760,7 +4775,7 @@ var Message = class _Message {
       contentType: ob.type,
       content: {
         version: 1,
-        digestAlgorithms: [{ algorithm: "Gost34311" }],
+        digestAlgorithms: [{ algorithm: ob.digestAlgorithm || "Gost34311" }],
         contentInfo: ob.data ? { contentType: "data", content: ob.data } : { contentType: "data" },
         certificate: [ob.cert.ob],
         signerInfos: [
@@ -4770,8 +4785,10 @@ var Message = class _Message {
               type: "issuerAndSerialNumber",
               value: ob.cert.nameSerial()
             },
-            digestAlgorithm: { algorithm: "Gost34311" },
-            digestEncryptionAlgorithm: { algorithm: "Dstu4145le" },
+            digestAlgorithm: { algorithm: ob.digestAlgorithm || "Gost34311" },
+            digestEncryptionAlgorithm: {
+              algorithm: ob.signatureAlgorithm || "Dstu4145le"
+            },
             encryptedDigest: signB
           }
         ]
@@ -4938,7 +4955,7 @@ var Message = class _Message {
     if (!signerValid) {
       return false;
     }
-    if (token.messageImprint.hashAlgorithm.algorithm !== "Gost34311") {
+    if (token.messageImprint.hashAlgorithm.algorithm !== (hash_f.algo || "Gost34311")) {
       return false;
     }
     return cmp(token.messageImprint.hashedMessage, hash_f(this[imprintOf]));
@@ -5007,9 +5024,11 @@ var Message = class _Message {
   }
   verify(hash_f, lookupCert, lookupCA, opts = {}) {
     const signatureAlgorithm = this.info.signerInfos[0].digestEncryptionAlgorithm.algorithm;
+    const digestAlgorithm = this.info.signerInfos[0].digestAlgorithm.algorithm;
     const signatureHash = (opts.hashes || {})[signatureAlgorithm] || hash_f;
+    const digestHash = (opts.hashes || {})[digestAlgorithm] || hash_f;
     const hash = this.mhash(signatureHash);
-    if (!this.verifyAttrs(hash_f, lookupCert, lookupCA, opts)) {
+    if (!this.verifyAttrs(digestHash, lookupCert, lookupCA, opts)) {
       return false;
     }
     return this.signer(lookupCert).pubkey.verify(hash, this.signature, "le");
@@ -5195,13 +5214,13 @@ function load(keyinfo, algo) {
 var load_default = load;
 
 // lib/services/tsp.js
-function getStampCb(cert, hashedMessage, query, cb, errorCb) {
+function getStampCb(cert, hashedMessage, query, hashAlgorithm, cb, errorCb) {
   var tsp = rfc3161_tsp_default.TimeStampReq.encode(
     {
       version: 1,
       messageImprint: {
         hashAlgorithm: {
-          algorithm: "Gost34311"
+          algorithm: hashAlgorithm || "Gost34311"
         },
         hashedMessage
       }
@@ -5226,9 +5245,9 @@ function getStampCb(cert, hashedMessage, query, cb, errorCb) {
     }
   );
 }
-function getStamp(cert, hashedMessage, query) {
+function getStamp(cert, hashedMessage, query, hashAlgorithm) {
   return new Promise(
-    (resolve, reject) => getStampCb(cert, hashedMessage, query, resolve, reject)
+    (resolve, reject) => getStampCb(cert, hashedMessage, query, hashAlgorithm, resolve, reject)
   );
 }
 
@@ -5395,8 +5414,27 @@ var Box = class _Box {
   }
   get hashFuncs() {
     return {
+      Gost34311: this.algo.hash,
       Dstu4145le: this.algo.hash,
+      "Dstu7564-256": this.algo.hashDstu7564,
       "Dstu4145le-Dstu7564-256": this.algo.hashDstu7564
+    };
+  }
+  signingProfile(key) {
+    if (key.priv.signAlgorithm === "Dstu4145le-Dstu7564-256") {
+      if (!this.algo.hashDstu7564) {
+        throw new Error("Kupyna hash function is not configured");
+      }
+      return {
+        hash: this.algo.hashDstu7564,
+        digestAlgorithm: "Dstu7564-256",
+        signatureAlgorithm: "Dstu4145le-Dstu7564-256"
+      };
+    }
+    return {
+      hash: this.algo.hash,
+      digestAlgorithm: "Gost34311",
+      signatureAlgorithm: "Dstu4145le"
     };
   }
   loadMaterial(info) {
@@ -5641,10 +5679,16 @@ var Box = class _Box {
   }
   async sign(data, role, unusedCert, opts) {
     const key = this.keyFor("sign", role);
-    const dataHash = this.algo.hash(data);
+    const profile = this.signingProfile(key);
+    const dataHash = profile.hash(data);
     let tspB;
     if (useContentTsp(opts.tsp)) {
-      tspB = await getStamp(key.cert, dataHash, this.query);
+      tspB = await getStamp(
+        key.cert,
+        dataHash,
+        this.query,
+        profile.digestAlgorithm
+      );
     }
     const message = new Message_default({
       type: "signedData",
@@ -5652,13 +5696,20 @@ var Box = class _Box {
       data: opts.detached ? null : data,
       dataHash,
       signer: key.priv,
-      hash: this.algo.hash,
+      hash: profile.hash,
+      digestAlgorithm: profile.digestAlgorithm,
+      signatureAlgorithm: profile.signatureAlgorithm,
       tspB,
       signTime: opts.time
     });
     if (useSignatureTsp(opts.tsp)) {
-      const signHash = this.algo.hash(message.signature);
-      tspB = await getStamp(key.cert, signHash, this.query);
+      const signHash = profile.hash(message.signature);
+      tspB = await getStamp(
+        key.cert,
+        signHash,
+        this.query,
+        profile.digestAlgorithm
+      );
       message.addSignatureToken(tspB);
     }
     if (opts.includeChain) {
@@ -5674,7 +5725,9 @@ var Box = class _Box {
         chain = [...certs.values()];
       }
       message.addCertRefs(
-        chain.map((cert) => CertificateRef_default.fromCert(cert, this.algo.hash))
+        chain.map(
+          (cert) => CertificateRef_default.fromCert(cert, profile.hash, profile.digestAlgorithm)
+        )
       );
       if (opts.includeChain !== "ref") {
         message.addCertValues(chain);
@@ -5728,7 +5781,9 @@ var Box = class _Box {
       );
       ocspResponses = ocspResponses.filter((iter) => iter);
       message.addOcspHashes(
-        ocspResponses.map((iter) => [iter.makeRef(this.ocspCtx)])
+        ocspResponses.map((iter) => [
+          iter.makeRef({ ...this.ocspCtx, hashFn: profile.hash })
+        ])
       );
       if (opts.ocsp !== "ref") {
         message.addOcspResponses(ocspResponses);
@@ -5857,7 +5912,7 @@ var Box = class _Box {
             this.algo.hash,
             lookup3,
             this.lookupCA.bind(this),
-            opts
+            { ...opts, hashes: this.hashFuncs }
           );
           x = msg.signer(lookup3);
           if (!x.canUseFor("sign")) {
