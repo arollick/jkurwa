@@ -7,6 +7,7 @@ import * as jk from "../lib/index.js";
 import Message from "../lib/models/Message.js";
 import rfc3161 from "../lib/spec/rfc3161-tsp.js";
 import { getStamp } from "../lib/services/tsp.js";
+import OcspResponse from "../lib/models/OcspResponse.js";
 
 describe("Signed Message", () => {
   const key1 = loadPriv("PRIV1.cer");
@@ -97,6 +98,24 @@ describe("Signed Message", () => {
 
     const parsed = rfc3161.TimeStampReq.decode(request, "der");
     assert.equal(parsed.messageImprint.hashAlgorithm.algorithm, "Dstu7564-256");
+  });
+
+  it("should label Kupyna OCSP references with the Kupyna hash OID", () => {
+    const kupynaHash = data => algo.hash(data);
+    const ref = OcspResponse.prototype.makeRef.call(
+      {
+        ob: {
+          tbsResponseData: {
+            responderID: { type: "byName", value: [] },
+            producedAt: new Date(time * 1000)
+          }
+        },
+        to_asn1: () => Buffer.from("ocsp")
+      },
+      { hashFn: kupynaHash, hashAlgorithm: "Dstu7564-256" }
+    );
+
+    assert.equal(ref.ob.ocspRepHash.hashAlgorithm.algorithm, "Dstu7564-256");
   });
 
   it("should serialize to asn1 buffer", () => {

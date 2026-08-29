@@ -4478,7 +4478,7 @@ var OcspResponse = class _OcspResponse {
       },
       ocspRepHash: {
         hashAlgorithm: {
-          algorithm: ctx.hashFn.algo || "Gost34311"
+          algorithm: ctx.hashAlgorithm || ctx.hashFn.algo || "Gost34311"
         },
         hashValue: ctx.hashFn(this.to_asn1())
       }
@@ -5782,7 +5782,11 @@ var Box = class _Box {
       ocspResponses = ocspResponses.filter((iter) => iter);
       message.addOcspHashes(
         ocspResponses.map((iter) => [
-          iter.makeRef({ ...this.ocspCtx, hashFn: profile.hash })
+          iter.makeRef({
+            ...this.ocspCtx,
+            hashFn: profile.hash,
+            hashAlgorithm: profile.digestAlgorithm
+          })
         ])
       );
       if (opts.ocsp !== "ref") {
