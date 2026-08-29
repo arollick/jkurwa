@@ -8,6 +8,7 @@ import Message from "../lib/models/Message.js";
 import rfc3161 from "../lib/spec/rfc3161-tsp.js";
 import { getStamp } from "../lib/services/tsp.js";
 import OcspResponse from "../lib/models/OcspResponse.js";
+import { SigningCertificateV2 } from "../lib/spec/rfc5035-certid.js";
 
 describe("Signed Message", () => {
   const key1 = loadPriv("PRIV1.cer");
@@ -81,6 +82,14 @@ describe("Signed Message", () => {
     assert.equal(message.wrap.content.digestAlgorithms[0].algorithm, "Dstu7564-256");
     assert.equal(signInfo.digestAlgorithm.algorithm, "Dstu7564-256");
     assert.equal(signInfo.digestEncryptionAlgorithm.algorithm, "Dstu4145le-Dstu7564-256");
+    const signingCertificate = SigningCertificateV2.decode(
+      message.pattrs.index.signingCertificateV2,
+      "der"
+    );
+    assert.equal(
+      signingCertificate.certs[0].hashAlgorithm.algorithm,
+      "Dstu7564-256"
+    );
     assert.equal(message.verify(algo.hash, () => cert, null, { hashes }), true);
   });
 

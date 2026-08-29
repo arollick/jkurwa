@@ -3879,10 +3879,10 @@ var SigningCertificateV2 = import_asn112.default.define("SigningCertificateV2", 
     this.key("policies").optional().any()
   );
 });
-SigningCertificateV2.wrap = function(cert, hash) {
+SigningCertificateV2.wrap = function(cert, hash, hashAlgorithm) {
   var idv2 = {
     hashAlgorithm: {
-      algorithm: "Gost34311"
+      algorithm: hashAlgorithm || "Gost34311"
     },
     certHash: hash,
     issuerSerial: {
@@ -4643,7 +4643,11 @@ var SignedAttrs = class extends Attrs {
   set signingCertificateV2(value) {
     this.setAttr(
       "signingCertificateV2",
-      SigningCertificateV2.wrap(value.cert.ob, value.hash)
+      SigningCertificateV2.wrap(
+        value.cert.ob,
+        value.hash,
+        value.hashAlgorithm
+      )
     );
   }
   set contentType(value) {
@@ -4800,7 +4804,8 @@ var Message = class _Message {
     this.parseAttrs();
     this.pattrs.signingCertificateV2 = {
       cert: ob.cert,
-      hash: ob.hash(ob.cert.as_asn1())
+      hash: ob.hash(ob.cert.as_asn1()),
+      hashAlgorithm: ob.digestAlgorithm
     };
     this.pattrs.contentType = "data";
     this.pattrs.messageDigest = digestB;
