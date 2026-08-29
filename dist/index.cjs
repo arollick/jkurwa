@@ -2342,6 +2342,13 @@ var Pub = class _Pub {
   keyid(algos) {
     return algos.hash(this.serialize());
   }
+  keyids(algos) {
+    const ids = [this.keyid(algos)];
+    if (algos.hashDstu7564) {
+      ids.push(this.keyid({ hash: algos.hashDstu7564 }));
+    }
+    return ids;
+  }
   static detect_format(inp) {
     if (is_hex(inp)) {
       return "hex";
@@ -3487,17 +3494,27 @@ var Certificate2 = class _Certificate {
       lookupFn
     )) && (usage ? this.canUseFor(usage) : true) && this.verifyTime(Number(time)) && this.verifySignature(issuer.pubkey_unpack(), hashes) && this.extension.authorityKeyIdentifier.equals(
       issuer.extension.subjectKeyIdentifier
-    ) && this.extension.subjectKeyIdentifier.equals(
-      this.pubkey.keyid({ hash: hashes.Dstu4145le })
+    ) && this.publicKeyIds(hashes).some(
+      (keyId) => this.extension.subjectKeyIdentifier.equals(keyId)
     );
   }
   verifySelfSigned({ time, usage }, hashes) {
-    return usage ? this.canUseFor(usage) : this.verifyTime(time) && this.verifySignature(this.pubkey_unpack(), hashes) && this.pubkey.keyid({ hash: hashes.Dstu4145le }).equals(this.extension.subjectKeyIdentifier) && this.extension.authorityKeyIdentifier.equals(
+    return usage ? this.canUseFor(usage) : this.verifyTime(time) && this.verifySignature(this.pubkey_unpack(), hashes) && this.publicKeyIds(hashes).some(
+      (keyId) => keyId.equals(this.extension.subjectKeyIdentifier)
+    ) && this.extension.authorityKeyIdentifier.equals(
       this.extension.subjectKeyIdentifier
     );
   }
   verifyTime(time) {
     return time >= this.valid.from && time < this.valid.to;
+  }
+  publicKeyIds(hashes) {
+    const ids = [this.pubkey.keyid({ hash: hashes.Dstu4145le })];
+    const hashDstu7564 = hashes["Dstu4145le-Dstu7564-256"];
+    if (hashDstu7564) {
+      ids.push(this.pubkey.keyid({ hash: hashDstu7564 }));
+    }
+    return ids;
   }
   verifySignature(pubkey2, hashFuncs) {
     const tbs = _Certificate.encodeTBS(this.ob.tbsCertificate);
@@ -5403,7 +5420,7 @@ var Box = class _Box {
     this._indexKeys();
   }
   async loadCertsCmp(url) {
-    const keyids = this.keys.filter((info) => info.priv).map((info) => info.priv.pub().keyid(this.algo));
+    const keyids = this.keys.filter((info) => info.priv).flatMap((info) => info.priv.pub().keyids(this.algo));
     const [key0, key1] = keyids;
     const certificates2 = await lookup2(keyids, url, this.query);
     let numberAdded = 0;
@@ -5455,11 +5472,19 @@ var Box = class _Box {
     return ret;
   }
   _indexKeys() {
-    this.keys = Object.entries(this.keysById).map(([keyid, priv]) => ({
-      priv,
-      cert: this.certsById[keyid] || null,
-      keyid
-    }));
+    const keys = /* @__PURE__ */ new Map();
+    for (let [keyid, priv] of Object.entries(this.keysById)) {
+      let item = keys.get(priv);
+      if (!item) {
+        item = { priv, cert: null, keyid };
+        keys.set(priv, item);
+      }
+      if (!item.cert && this.certsById[keyid]) {
+        item.cert = this.certsById[keyid];
+        item.keyid = keyid;
+      }
+    }
+    this.keys = [...keys.values()];
   }
   _indexCAs() {
     Object.keys(this.cas).forEach((idx) => {
@@ -5607,13 +5632,17 @@ var Box = class _Box {
       return;
     }
     const pub = cert ? cert.pubkey : priv.pub();
-    const keyid = pub.keyid(this.algo).toString("hex");
+    const keyids = pub.keyids(this.algo).map((keyid) => keyid.toString("hex"));
     if (cert) {
-      this.certsById[keyid] = cert;
+      for (let keyid of keyids) {
+        this.certsById[keyid] = cert;
+      }
       this.certsRDN[cert.rdnSerial()] = cert;
     }
     if (priv) {
-      this.keysById[keyid] = priv;
+      for (let keyid of keyids) {
+        this.keysById[keyid] = priv;
+      }
     }
   }
   async sign(data, role, unusedCert, opts) {
